@@ -78,12 +78,12 @@ def get_start_data():
     return result
 
 
-def record_not_found_data(ozon_id, file_name):
+def record_no_data(ozon_id, file_name, message):
     workbook = openpyxl.load_workbook(file_name)
     page = workbook.active
     index = page.max_row + 1
     page[f"B{index}"].value = ozon_id
-    page[f"C{index}"].value = "Товар не найден"
+    page[f"C{index}"].value = message
     workbook.save(file_name)
 
 

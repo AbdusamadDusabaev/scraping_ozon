@@ -1,10 +1,11 @@
+import re
 from bs4 import BeautifulSoup
 import undetected_chromedriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
 import json
-from connect import get_start_data, record_data, create_result_file, record_not_found_data
+from connect import get_start_data, record_data, create_result_file, record_no_data
 import time
 
 
@@ -64,7 +65,7 @@ def get_product_link_via_search_request(browser, search_request):
     else:
         page = 1
         print(f"[INFO] Собираем ссылки на товары со страницы {page}")
-        json_string = bs_object.find(name="div", id="state-searchResultsV2-311178-default-1")["data-state"].replace("&quot;", '"')
+        json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
         json_object = json.loads(json_string)
         result.extend([domain + link["action"]["link"] for link in json_object["items"]])
         while True:
@@ -73,13 +74,13 @@ def get_product_link_via_search_request(browser, search_request):
             browser.get(url=f"{url}&page={page}")
             response = browser.page_source
             bs_object = BeautifulSoup(response, "lxml")
-            json_string = bs_object.find(name="div", id="state-searchResultsV2-311178-default-1")["data-state"].replace("&quot;", '"')
+            json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
             json_object = json.loads(json_string)
-            if json_object["items"] is None:
+            if json_object["items"] is None or domain + json_object["items"][0]["action"]["link"] in result:
                 break
             else:
                 result.extend([domain + link["action"]["link"] for link in json_object["items"]])
-    return result
+    return list(set(result))
 
 
 def get_product_links_via_brand(browser, brand_url):
@@ -89,7 +90,7 @@ def get_product_links_via_brand(browser, brand_url):
     bs_object = BeautifulSoup(response, "lxml")
     page = 1
     print(f"[INFO] Собираем ссылки на товары со страницы {page}")
-    json_string = bs_object.find(name="div", id="state-searchResultsV2-312617-default-1")["data-state"].replace("&quot;", '"')
+    json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
     json_object = json.loads(json_string)
     result.extend([domain + link["action"]["link"] for link in json_object["items"]])
     while True:
@@ -98,14 +99,13 @@ def get_product_links_via_brand(browser, brand_url):
         browser.get(url=f"{brand_url}/?page={page}")
         response = browser.page_source
         bs_object = BeautifulSoup(response, "lxml")
-        json_string = bs_object.find(name="div", id="state-searchResultsV2-312617-default-1")["data-state"].replace(
-            "&quot;", '"')
+        json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
         json_object = json.loads(json_string)
-        if json_object["items"] is None:
+        if json_object["items"] is None or domain + json_object["items"][0]["action"]["link"] in result:
             break
         else:
             result.extend([domain + link["action"]["link"] for link in json_object["items"]])
-    return result
+    return list(set(result))
 
 
 def get_product_links_via_seller(browser, seller_url):
@@ -115,7 +115,7 @@ def get_product_links_via_seller(browser, seller_url):
     bs_object = BeautifulSoup(response, "lxml")
     page = 1
     print(f"[INFO] Собираем ссылки на товары со страницы {page}")
-    json_string = bs_object.find(name="div", id="state-searchResultsV2-312617-default-1")["data-state"].replace("&quot;", '"')
+    json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
     json_object = json.loads(json_string)
     result.extend([domain + link["action"]["link"] for link in json_object["items"]])
     while True:
@@ -124,14 +124,14 @@ def get_product_links_via_seller(browser, seller_url):
         browser.get(url=f"{seller_url}/?page={page}")
         response = browser.page_source
         bs_object = BeautifulSoup(response, "lxml")
-        json_string = bs_object.find(name="div", id="state-searchResultsV2-312617-default-1")["data-state"].replace(
-            "&quot;", '"')
+        json_string = bs_object.find(name="div", id=re.compile("state-searchResultsV2"))["data-state"].replace("&quot;", '"')
         json_object = json.loads(json_string)
-        if json_object["items"] is None:
+        first_link = domain + json_object["items"][0]["action"]["link"]
+        if json_object["items"] is None or first_link in result:
             break
         else:
             result.extend([domain + link["action"]["link"] for link in json_object["items"]])
-    return result
+    return list(set(result))
 
 
 def get_product_info(browser, product_url, file_name):
@@ -146,53 +146,59 @@ def get_product_info(browser, product_url, file_name):
         response = browser.page_source
         bs_object = BeautifulSoup(response, "lxml")
         json_object = json.loads(bs_object.body.text)["widgetStates"]
-        if "webDetailSKU-909751-default-1" not in list(json_object.keys()) and "webDetailSKU-909754-default-1" not in list(json_object.keys()):
+
+        out_of_stock = True
+        for key in json_object.keys():
+            if "webDetailSKU" in key:
+                out_of_stock = False
+                break
+        if out_of_stock:
             print("[INFO] Данный товар закончился")
-            return "Out of Stock"
-        if "webDetailSKU-909751-default-1" is list(json_object.keys()):
-            ozon_id = json.loads(json_object["webDetailSKU-909751-default-1"])["sku"]
-            product_name = json.loads(json_object["webProductHeading-943796-default-1"])["title"]
-            model_name = get_model_name(product_name=product_name)
-            prices = json.loads(json_object["webPrice-952422-default-1"])
-            purchase_price = int(prices["price"].replace("₽", ""))
-            if "originalPrice" in list(prices.keys()):
-                full_price = int(prices["originalPrice"].replace("₽", ""))
-            else:
-                full_price = purchase_price
-            if "webOzonAccountPrice-1587460-default-1" in list(json_object.keys()):
-                discount_card_price = int(json.loads(json_object["webOzonAccountPrice-1587460-default-1"])["priceText"].replace("при оплате Ozon Картой", "").replace("₽", "").strip())
-            else:
+            record_no_data(ozon_id="ERROR", file_name=file_name, message="Данный товар закончился")
+            return "out_of_stock"
+
+        ozon_id, product_name, model_name, purchase_price, discount_card_price, full_price = "", "", "", "", "", ""
+        categories, main_image, additional_images, main_image_id, rating, amount_reviews = "", "", "", "", "", ""
+
+        for key in json_object.keys():
+            if (ozon_id != "" and product_name != "" and model_name != "" and purchase_price != "" and
+               discount_card_price != "" and full_price != "" and categories != "" and main_image != "" and
+               additional_images != "" and main_image_id != "" and rating != "" and amount_reviews != ""):
+                break
+            if "webDetailSKU" in key:
+                ozon_id = json.loads(json_object["key"])["sku"]
+                continue
+            if "webProductHeading" in key:
+                product_name = json.loads(json_object[key])["title"]
+                model_name = get_model_name(product_name=product_name)
+                continue
+            if "webPrice" in key:
+                prices = json.loads(json_object[key])
+                purchase_price = int(prices["price"].replace("₽", ""))
                 discount_card_price = purchase_price
-            categories = " > ".join([category["text"] for category in json.loads(json_object["breadCrumbs-1477770-default-1"])["breadcrumbs"]])
-            images = json.loads(json_object["webGallery-2912937-default-1"])["images"]
-            main_image = images[0]["src"]
-            main_image_id = main_image.split("/")[-1].split(".")[0]
-            additional_images = ", ".join([image["src"].replace("w50", "wc1000") for image in images[1:]])
-            rating_object = json.loads(json.loads(bs_object.pre.text)["seo"]["script"][0]["innerHTML"])["aggregateRating"]
-            rating = rating_object["ratingValue"]
-            amount_reviews = rating_object["reviewCount"]
-        else:
-            ozon_id = json.loads(json_object["webDetailSKU-909754-default-1"])["sku"]
-            product_name = json.loads(json_object["webProductHeading-943795-default-1"])["title"]
-            model_name = get_model_name(product_name=product_name)
-            prices = json.loads(json_object["webPrice-2136014-default-1"])
-            purchase_price = int(prices["price"].replace("₽", ""))
-            if "originalPrice" in list(prices.keys()):
-                full_price = int(prices["originalPrice"].replace("₽", ""))
-            else:
-                full_price = purchase_price
-            if "webOzonAccountPrice-2136009-default-1" in list(json_object.keys()):
-                discount_card_price = int(json.loads(json_object["webOzonAccountPrice-2136009-default-1"])["priceText"].replace("при оплате Ozon Картой", "").replace("₽", "").strip())
-            else:
-                discount_card_price = purchase_price
-            categories = " > ".join([category["text"] for category in json.loads(json_object["breadCrumbs-1619260-default-1"])["breadcrumbs"]])
-            images = json.loads(json_object["webGallery-1748356-default-1"])["images"]
-            main_image = images[0]["src"]
-            main_image_id = main_image.split("/")[-1].split(".")[0]
-            additional_images = ", ".join([image["src"].replace("w50", "wc1000") for image in images[1:]])
-            rating_object = json.loads(json.loads(bs_object.pre.text)["seo"]["script"][0]["innerHTML"])["aggregateRating"]
-            rating = rating_object["ratingValue"]
-            amount_reviews = rating_object["reviewCount"]
+                if "originalPrice" in list(prices.keys()):
+                    full_price = int(prices["originalPrice"].replace("₽", ""))
+                else:
+                    full_price = purchase_price
+                continue
+            if "webOzonAccountPrice" in key:
+                discount_card_price = int(json.loads(json_object[key])["priceText"].replace("при оплате Ozon Картой", "").replace("₽", "").strip())
+                continue
+            if "breadCrumbs" in key:
+                categories = " > ".join([category["text"] for category in json.loads(json_object[key])["breadcrumbs"]])
+                continue
+            if "webGallery" in key:
+                images = json.loads(json_object[key])["images"]
+                main_image = images[0]["src"]
+                main_image_id = main_image.split("/")[-1].split(".")[0]
+                additional_images = ", ".join([image["src"].replace("w50", "wc1000") for image in images[1:]])
+                continue
+            if "seo" in key:
+                rating_object = json.loads(json.loads(bs_object.pre.text)[key]["script"][0]["innerHTML"])["aggregateRating"]
+                rating = rating_object["ratingValue"]
+                amount_reviews = rating_object["reviewCount"]
+                continue
+
         browser.get(url=characteristics_api_url)
         response = browser.page_source
         bs_object = BeautifulSoup(response, "lxml")
@@ -261,7 +267,7 @@ def main():
                     get_product_info(browser=browser, product_url=product_url, file_name=file_name)
                 else:
                     print("[INFO] Товар с указанным sku не найден на Ozon")
-                    record_not_found_data(ozon_id=position["sku"], file_name=file_name)
+                    record_no_data(ozon_id=position["sku"], file_name=file_name, message="Товар не найден")
                 stop_time = time.time()
                 print(f"[INFO] На парсинг позиции ушло {stop_time - start_time} секунд")
 
@@ -301,11 +307,15 @@ def main():
             for position in positions["search_request"]:
                 print(f"[INFO] Обрабатываем товар по поисковому запросу: {position['value']}")
                 product_urls = get_product_link_via_search_request(browser=browser, search_request=position["value"])
-                for product_url in product_urls:
-                    start_time = time.time()
-                    get_product_info(browser=browser, product_url=product_url, file_name=file_name)
-                    stop_time = time.time()
-                    print(f"[INFO] На парсинг позиции ушло {stop_time - start_time} секунд")
+                if product_urls == "Not Found":
+                    record_no_data(ozon_id="ERROR", file_name=file_name,
+                                   message=f'По поисковому запросу {positions["search_request"]} не найдено товаров')
+                else:
+                    for product_url in product_urls:
+                        start_time = time.time()
+                        get_product_info(browser=browser, product_url=product_url, file_name=file_name)
+                        stop_time = time.time()
+                        print(f"[INFO] На парсинг позиции ушло {stop_time - start_time} секунд")
 
     finally:
         browser.close()
