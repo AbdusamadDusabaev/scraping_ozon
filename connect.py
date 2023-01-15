@@ -15,20 +15,21 @@ def create_result_file(criteria, region):
     workbook = openpyxl.Workbook()
     page = workbook.active
     page[f"A1"].value = "Артикул"
-    page[f"B1"].value = "ID Товара"
+    page[f"B1"].value = "SKU Товара"
     page[f"C1"].value = "Название"
-    page[f"D1"].value = "Модель"
-    page[f"E1"].value = "Цена со скидкой"
-    page[f"F1"].value = "Цена без скидки"
-    page[f"G1"].value = "Цена с картой Ozon"
-    page[f"H1"].value = "Категории"
-    page[f"I1"].value = "Главное изображение"
-    page[f"J1"].value = "Изображения"
-    page[f"K1"].value = "ID главного изображения"
-    page[f"L1"].value = "Рейтинг"
-    page[f"M1"].value = "Количество отзывов"
-    page[f"N1"].value = "Продавец"
-    page[f"O1"].value = "Описание"
+    page[f"D1"].value = "Ссылка на товар"
+    page[f"E1"].value = "Модель"
+    page[f"F1"].value = "Цена со скидкой"
+    page[f"G1"].value = "Цена без скидки"
+    page[f"H1"].value = "Цена с картой Ozon"
+    page[f"I1"].value = "Категории"
+    page[f"J1"].value = "Главное изображение"
+    page[f"K1"].value = "Изображения"
+    page[f"L1"].value = "ID главного изображения"
+    page[f"M1"].value = "Рейтинг"
+    page[f"N1"].value = "Количество отзывов"
+    page[f"O1"].value = "Продавец"
+    page[f"P1"].value = "Описание"
     workbook.save(file_name)
     return file_name
 
@@ -77,27 +78,37 @@ def get_start_data():
     return result
 
 
+def record_not_found_data(ozon_id, file_name):
+    workbook = openpyxl.load_workbook(file_name)
+    page = workbook.active
+    index = page.max_row + 1
+    page[f"B{index}"].value = ozon_id
+    page[f"C{index}"].value = "Товар не найден"
+    workbook.save(file_name)
+
+
 def record_data(article, ozon_id, product_name, model_name, purchase_price, full_price, discount_card_price,
                 categories, main_image, additional_images, main_image_id, characteristics, rating, amount_reviews,
-                file_name, seller, description):
+                file_name, seller, description, product_url):
     workbook = openpyxl.load_workbook(file_name)
     page = workbook.active
     index = page.max_row + 1
     page[f"A{index}"].value = article
     page[f"B{index}"].value = ozon_id
     page[f"C{index}"].value = product_name
-    page[f"D{index}"].value = model_name
-    page[f"E{index}"].value = purchase_price
-    page[f"F{index}"].value = full_price
-    page[f"G{index}"].value = discount_card_price
-    page[f"H{index}"].value = categories
-    page[f"I{index}"].value = main_image
-    page[f"J{index}"].value = additional_images
-    page[f"K{index}"].value = main_image_id
-    page[f"L{index}"].value = rating
-    page[f"M{index}"].value = amount_reviews
-    page[f"N{index}"].value = seller
-    page[f"O{index}"].value = description
+    page[f"D{index}"].value = product_url
+    page[f"E{index}"].value = model_name
+    page[f"F{index}"].value = purchase_price
+    page[f"G{index}"].value = full_price
+    page[f"H{index}"].value = discount_card_price
+    page[f"I{index}"].value = categories
+    page[f"J{index}"].value = main_image
+    page[f"K{index}"].value = additional_images
+    page[f"L{index}"].value = main_image_id
+    page[f"M{index}"].value = rating
+    page[f"N{index}"].value = amount_reviews
+    page[f"O{index}"].value = seller
+    page[f"P{index}"].value = description
     for key in characteristics.keys():
         for symbol in symbols:
             current_header = page[f"{symbol}1"].value
