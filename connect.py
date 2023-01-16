@@ -30,6 +30,8 @@ def create_result_file(criteria, region):
     page[f"N1"].value = "Количество отзывов"
     page[f"O1"].value = "Продавец"
     page[f"P1"].value = "Описание"
+    if criteria == "search_request":
+        page[f"Q1"].value = "Поисковой запрос"
     workbook.save(file_name)
     return file_name
 
@@ -89,7 +91,7 @@ def record_no_data(ozon_id, file_name, message):
 
 def record_data(article, ozon_id, product_name, model_name, purchase_price, full_price, discount_card_price,
                 categories, main_image, additional_images, main_image_id, characteristics, rating, amount_reviews,
-                file_name, seller, description, product_url):
+                file_name, seller, description, product_url, search_request=None):
     workbook = openpyxl.load_workbook(file_name)
     page = workbook.active
     index = page.max_row + 1
@@ -109,6 +111,8 @@ def record_data(article, ozon_id, product_name, model_name, purchase_price, full
     page[f"N{index}"].value = amount_reviews
     page[f"O{index}"].value = seller
     page[f"P{index}"].value = description
+    if search_request is not None:
+        page[f"Q{index}"].value = search_request
     for key in characteristics.keys():
         for symbol in symbols:
             current_header = page[f"{symbol}1"].value
